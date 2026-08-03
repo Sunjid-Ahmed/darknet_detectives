@@ -1,0 +1,2431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darknet Detectives // CTF Collective</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050608;
+    --surface: #0a0d12;
+    --surface-2: #0f1318;
+    --surface-3: #141a22;
+    --border: #1a2028;
+    --border-bright: #2a3540;
+    --primary: #00ff9d;
+    --primary-dim: #00b870;
+    --primary-deep: #007a4a;
+    --secondary: #ff2e63;
+    --tertiary: #00d4ff;
+    --warning: #ffaa00;
+    --text: #d4f1e0;
+    --text-dim: #6a7a78;
+    --muted: #3a4540;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow-x: hidden;
+    cursor: none;
+    line-height: 1.6;
+  }
+  /* Custom Cursor */
+  .cursor-dot, .cursor-ring {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10001;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    will-change: transform;
+  }
+  .cursor-dot {
+    width: 6px; height: 6px;
+    background: var(--primary);
+    box-shadow: 0 0 10px var(--primary);
+    transition: transform 0.05s, background 0.2s;
+  }
+  .cursor-ring {
+    width: 36px; height: 36px;
+    border: 1px solid var(--primary);
+    transition: transform 0.18s ease-out, width 0.3s, height 0.3s, border-color 0.3s, background 0.3s;
+  }
+  .cursor-ring.hover {
+    width: 60px; height: 60px;
+    border-color: var(--secondary);
+    background: rgba(255, 46, 99, 0.05);
+  }
+  .cursor-ring.click {
+    width: 24px; height: 24px;
+    background: rgba(0, 255, 157, 0.2);
+  }
+  @media (hover: none), (max-width: 768px) {
+    body { cursor: auto; }
+    .cursor-dot, .cursor-ring { display: none !important; }
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--primary-deep); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--primary-dim); }
+  /* Selection */
+  ::selection { background: var(--primary); color: var(--bg); }
+  /* Matrix canvas */
+  #matrix-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+  /* Scanlines */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 255, 157, 0.025) 0px,
+      rgba(0, 255, 157, 0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    z-index: 9996;
+  }
+  /* Noise */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.035;
+    pointer-events: none;
+    z-index: 9997;
+    mix-blend-mode: overlay;
+  }
+  /* Boot screen */
+  #boot {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 10002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    transition: opacity 0.6s, visibility 0.6s;
+  }
+  #boot.hidden { opacity: 0; visibility: hidden; }
+  .boot-content {
+    width: 90%;
+    max-width: 600px;
+    padding: 2rem;
+    border: 1px solid var(--border-bright);
+    background: var(--surface);
+    position: relative;
+  }
+  .boot-content::before, .boot-content::after {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    border: 1px solid var(--primary);
+  }
+  .boot-content::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .boot-content::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  #boot-text {
+    color: var(--primary);
+    font-size: 0.85rem;
+    line-height: 1.8;
+    min-height: 200px;
+    white-space: pre-wrap;
+  }
+  #boot-bar {
+    height: 2px;
+    background: var(--surface-2);
+    margin-top: 1rem;
+    overflow: hidden;
+  }
+  #boot-progress {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--primary), var(--tertiary));
+    transition: width 0.1s;
+    box-shadow: 0 0 10px var(--primary);
+  }
+  /* Progress bar */
+  #progress {
+    position: fixed;
+    top: 0; left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--tertiary));
+    z-index: 9999;
+    width: 0;
+    box-shadow: 0 0 10px var(--primary);
+  }
+  /* Nav */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    backdrop-filter: blur(16px);
+    background: rgba(5, 6, 8, 0.75);
+    border-bottom: 1px solid var(--border);
+    transition: transform 0.4s;
+  }
+  nav.hidden { transform: translateY(-100%); }
+  .nav-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    letter-spacing: 0.05em;
+  }
+  .logo-icon {
+    color: var(--secondary);
+    animation: spin-slow 8s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin-slow { to { transform: rotate(360deg); } }
+  .nav-links {
+    display: flex;
+    gap: 1.8rem;
+    list-style: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 0.08em;
+    position: relative;
+  }
+  .nav-links a:hover, .nav-links a.active {
+    color: var(--primary);
+  }
+  .nav-links a::before {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0;
+    width: 0; height: 1px;
+    background: var(--primary);
+    transition: width 0.3s;
+  }
+  .nav-links a:hover::before, .nav-links a.active::before { width: 100%; }
+  .nav-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--primary);
+  }
+  .nav-ip { color: var(--text-dim); display: flex; align-items: center; gap: 0.4rem; }
+  .nav-ip span { color: var(--primary); }
+  @media (max-width: 900px) {
+    .nav-links { display: none; }
+    .nav-ip { display: none; }
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--primary);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  /* Section base */
+  section {
+    position: relative;
+    z-index: 1;
+    padding: 8rem 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 768px) {
+    section { padding: 5rem 1.25rem; }
+  }
+  /* Hero */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 6rem;
+    position: relative;
+  }
+  .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0, 255, 157, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 157, 0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    background-position: center;
+    mask-image: radial-gradient(ellipse 80% 60% at center, black 0%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at center, black 0%, transparent 75%);
+    pointer-events: none;
+  }
+  .hero-status-bar {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-bottom: 2rem;
+    letter-spacing: 0.1em;
+  }
+  .hero-status-bar span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .hero-status-bar i { color: var(--primary); }
+  .hero-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: clamp(2.5rem, 9vw, 7rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+  .hero-title .line { display: block; }
+  .hero-title .accent { color: var(--primary); }
+  .glitch {
+    position: relative;
+    display: inline-block;
+  }
+  .glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+  .glitch::before {
+    animation: glitch-1 4s infinite;
+    color: var(--secondary);
+    clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+  }
+  .glitch::after {
+    animation: glitch-2 4s infinite;
+    color: var(--tertiary);
+    clip-path: polygon(0 66%, 100% 66%, 100% 100%, 0 100%);
+  }
+  @keyframes glitch-1 {
+    0%, 90%, 100% { transform: translate(0); }
+    92% { transform: translate(-3px, 1px); }
+    94% { transform: translate(3px, -1px); }
+    96% { transform: translate(-2px, -1px); }
+    98% { transform: translate(2px, 2px); }
+  }
+  @keyframes glitch-2 {
+    0%, 90%, 100% { transform: translate(0); }
+    92% { transform: translate(3px, -1px); }
+    94% { transform: translate(-3px, 1px); }
+    96% { transform: translate(2px, 1px); }
+    98% { transform: translate(-2px, -2px); }
+  }
+  .hero-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+    max-width: 600px;
+    line-height: 1.7;
+  }
+  .hero-typing {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary);
+    font-size: 0.9rem;
+    min-height: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  .hero-typing::after {
+    content: '▊';
+    animation: blink 1s infinite;
+    color: var(--primary);
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  .hero-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    padding: 0.9rem 1.8rem;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    background: transparent;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: none;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--primary);
+    transform: translateY(101%);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: -1;
+  }
+  .btn:hover::before { transform: translateY(0); }
+  .btn:hover { color: var(--bg); }
+  .btn.secondary { border-color: var(--border-bright); color: var(--text); }
+  .btn.secondary::before { background: var(--text); }
+  .btn.secondary:hover { color: var(--bg); }
+  /* Floating tags */
+  .floating-tag {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    border: 1px solid var(--border-bright);
+    padding: 0.4rem 0.8rem;
+    background: rgba(10, 13, 18, 0.6);
+    backdrop-filter: blur(8px);
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  /* Section header */
+  .section-header {
+    margin-bottom: 4rem;
+    position: relative;
+  }
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary);
+    font-size: 0.85rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+  .section-title::before {
+    content: '';
+    width: 30px; height: 1px;
+    background: var(--primary);
+  }
+  .section-heading {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+  }
+  .section-heading .accent { color: var(--primary); }
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 1.05rem;
+    max-width: 600px;
+  }
+  /* About cards */
+  .about-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+  .about-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s;
+  }
+  .about-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.8s;
+  }
+  .about-card:hover::before { transform: translateX(100%); }
+  .about-card:hover {
+    border-color: var(--primary-deep);
+    transform: translateY(-4px);
+  }
+  .about-card .icon {
+    width: 50px; height: 50px;
+    border: 1px solid var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 1.3rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+  .about-card .icon::before, .about-card .icon::after {
+    content: '';
+    position: absolute;
+    width: 6px; height: 6px;
+    border: 1px solid var(--primary);
+  }
+  .about-card .icon::before { top: -3px; left: -3px; border-right: none; border-bottom: none; }
+  .about-card .icon::after { bottom: -3px; right: -3px; border-left: none; border-top: none; }
+  .about-card h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    color: var(--text);
+    margin-bottom: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+  .about-card p {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+  /* Member cards */
+  .crew-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+  .member-card {
+    background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .member-card.leader { border-color: var(--primary-deep); }
+  .member-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.8s;
+  }
+  .member-card:hover::before { transform: translateX(100%); }
+  .member-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-6px);
+    box-shadow: 0 30px 80px -30px rgba(0, 255, 157, 0.25);
+  }
+  .member-card.leader:hover { box-shadow: 0 30px 80px -30px rgba(0, 255, 157, 0.4); }
+  .member-header {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  .member-header .id { color: var(--primary); }
+  .member-header .header-right { display: flex; gap: 0.5rem; align-items: center; }
+  .member-header .leader-badge {
+    color: var(--secondary);
+    border: 1px solid var(--secondary);
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+  }
+  .status-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .status-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .status-badge.online { color: var(--primary); border-color: var(--primary); background: rgba(0, 255, 157, 0.1); }
+  .status-badge.online::before { background: var(--primary); box-shadow: 0 0 6px var(--primary); animation: pulse 1.5s infinite; }
+  .status-badge.idle { color: var(--warning); border-color: var(--warning); background: rgba(255, 170, 0, 0.1); }
+  .status-badge.idle::before { background: var(--warning); }
+  .status-badge.offline { color: var(--text-dim); border-color: var(--border-bright); background: rgba(255, 255, 255, 0.05); }
+  .status-badge.offline::before { background: var(--text-dim); }
+  .member-body {
+    padding: 1.8rem 1.5rem;
+  }
+  .member-avatar {
+    width: 120px; height: 120px;
+    border: 1px solid var(--border-bright);
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-3);
+  }
+  .member-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    filter: grayscale(100%) contrast(1.2) brightness(0.85);
+    transition: filter 0.4s, transform 0.4s;
+  }
+  .member-card:hover .member-avatar img {
+    filter: grayscale(0%) contrast(1.1) brightness(1);
+    transform: scale(1.05);
+  }
+  .member-avatar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 60%, rgba(0, 255, 157, 0.1));
+    pointer-events: none;
+  }
+  .member-avatar .scan {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 255, 157, 0.3) 50%, transparent 100%);
+    height: 4px;
+    animation: scan-avatar 3s linear infinite;
+  }
+  @keyframes scan-avatar {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+  .member-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    color: var(--text);
+    margin-bottom: 0.3rem;
+    letter-spacing: -0.01em;
+  }
+  .member-alias {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .member-alias::before { content: '@'; color: var(--text-dim); }
+  .member-role {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px dashed var(--border-bright);
+  }
+  .member-bio {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    line-height: 1.7;
+    margin-bottom: 1.5rem;
+  }
+  .member-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+  }
+  .skill-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    transition: all 0.2s;
+  }
+  .skill-tag:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(0, 255, 157, 0.05);
+  }
+  .member-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .member-links {
+    display: flex;
+    gap: 1rem;
+  }
+  .member-links a {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    transition: color 0.2s;
+    text-decoration: none;
+  }
+  .member-links a:hover { color: var(--primary); }
+  .clearance {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  .clearance .level { color: var(--warning); }
+  /* Skills section */
+  .skills-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .skills-grid { grid-template-columns: 1fr; }
+  }
+  .skill-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .skill-item {
+    border-left: 1px solid var(--border-bright);
+    padding-left: 1.2rem;
+    position: relative;
+  }
+  .skill-item::before {
+    content: '';
+    position: absolute;
+    left: -3px; top: 0.5rem;
+    width: 5px; height: 5px;
+    background: var(--primary);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--primary);
+  }
+  .skill-item.active::before {
+    animation: pulse 1.5s infinite;
+  }
+  .skill-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .skill-name {
+    font-size: 0.85rem;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+  .skill-percent {
+    font-size: 0.8rem;
+    color: var(--primary);
+  }
+  .skill-bar {
+    height: 3px;
+    background: var(--surface-2);
+    overflow: hidden;
+    position: relative;
+  }
+  .skill-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--primary), var(--tertiary));
+    transition: width 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+  }
+  .skill-fill::after {
+    content: '';
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 20px;
+    background: linear-gradient(90deg, transparent, var(--primary));
+    filter: blur(4px);
+  }
+  /* Radar chart */
+  .radar-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    position: relative;
+  }
+  .radar-container::before, .radar-container::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border: 1px solid var(--primary);
+  }
+  .radar-container::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .radar-container::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .radar-title {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .radar-title .live {
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .radar-svg {
+    width: 100%;
+    height: auto;
+  }
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+  .stat-item {
+    background: var(--surface);
+    padding: 2.5rem 2rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s;
+  }
+  .stat-item:hover { background: var(--surface-2); }
+  .stat-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 1px;
+    background: var(--primary);
+    transition: width 0.4s;
+  }
+  .stat-item:hover::before { width: 60%; }
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    color: var(--primary);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  /* Terminal */
+  .terminal-container {
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    overflow: hidden;
+    box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8);
+  }
+  .terminal-header {
+    background: var(--surface-2);
+    padding: 0.8rem 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+  .terminal-header .dots {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .terminal-header .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--border-bright);
+  }
+  .terminal-header .dot:nth-child(1) { background: var(--secondary); }
+  .terminal-header .dot:nth-child(2) { background: var(--warning); }
+  .terminal-header .dot:nth-child(3) { background: var(--primary); }
+  .terminal-title {
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  .terminal-info {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+  }
+  .terminal-body {
+    height: 420px;
+    overflow-y: auto;
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+  }
+  .terminal-body::-webkit-scrollbar { width: 4px; }
+  .terminal-output {
+    color: var(--text);
+    margin-bottom: 0.4rem;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .terminal-output.primary { color: var(--primary); }
+  .terminal-output.secondary { color: var(--secondary); }
+  .terminal-output.dim { color: var(--text-dim); }
+  .terminal-output.warning { color: var(--warning); }
+  .terminal-input-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--primary);
+  }
+  .terminal-prompt {
+    color: var(--secondary);
+    flex-shrink: 0;
+  }
+  .terminal-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--primary);
+    font-family: inherit;
+    font-size: inherit;
+    flex: 1;
+    caret-color: var(--primary);
+  }
+  .terminal-suggestions {
+    padding: 0.8rem 1.5rem;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.2rem;
+  }
+  .terminal-suggestions span {
+    cursor: none;
+    transition: color 0.2s;
+  }
+  .terminal-suggestions span:hover { color: var(--primary); }
+  /* Contact */
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .contact-grid { grid-template-columns: 1fr; }
+  }
+  .contact-info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.8rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    transition: all 0.3s;
+  }
+  .contact-info-card:hover {
+    border-color: var(--primary);
+    transform: translateX(4px);
+  }
+  .contact-icon {
+    width: 50px; height: 50px;
+    border: 1px solid var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .contact-info-card .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+  }
+  .contact-info-card .value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  .contact-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+  }
+  .form-group {
+    margin-bottom: 1.2rem;
+  }
+  .form-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+  .form-input, .form-textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    padding: 0.8rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-textarea:focus {
+    border-color: var(--primary);
+  }
+  .form-textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem 2rem 2rem;
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+  }
+  .footer-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 3rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 768px) {
+    .footer-content { grid-template-columns: 1fr; gap: 2rem; }
+  }
+  .footer-brand .logo { margin-bottom: 1rem; }
+  .footer-brand p {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    max-width: 400px;
+  }
+  .footer-col h4 {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    margin-bottom: 1rem;
+  }
+  .footer-col ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .footer-col a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    transition: color 0.2s;
+  }
+  .footer-col a:hover { color: var(--primary); }
+  .footer-bottom {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  /* Reveal animations */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s, transform 0.8s;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Activity feed */
+  .activity-feed {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: rgba(10, 13, 18, 0.9);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-bright);
+    padding: 1rem;
+    max-width: 320px;
+    z-index: 50;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    transition: transform 0.4s, opacity 0.4s;
+  }
+  .activity-feed.hidden {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  .activity-header {
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+  }
+  .activity-header .close {
+    cursor: none;
+    color: var(--text-dim);
+    transition: color 0.2s;
+  }
+  .activity-header .close:hover { color: var(--secondary); }
+  .activity-log {
+    color: var(--text-dim);
+    line-height: 1.6;
+    max-height: 100px;
+    overflow: hidden;
+  }
+  .activity-log .log-time { color: var(--primary); }
+  .activity-log .log-msg { color: var(--text); }
+  @media (max-width: 768px) {
+    .activity-feed { display: none; }
+  }
+  /* Ping FAB */
+  .ping-btn {
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
+    z-index: 50;
+    background: rgba(10, 13, 18, 0.9);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 0.8rem 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    cursor: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(0, 255, 157, 0.2);
+    letter-spacing: 0.1em;
+  }
+  .ping-btn:hover {
+    background: var(--primary);
+    color: var(--bg);
+    box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
+  }
+  .ping-btn i { animation: pulse 2s infinite; }
+  @media (max-width: 768px) {
+    .ping-btn { bottom: 1rem; left: 1rem; padding: 0.6rem 1rem; }
+  }
+  /* Ping Flash */
+  .ping-flash {
+    position: fixed;
+    inset: 0;
+    background: var(--primary);
+    opacity: 0;
+    z-index: 9998;
+    pointer-events: none;
+    animation: flash-anim 1s forwards;
+  }
+  @keyframes flash-anim {
+    0% { opacity: 0.4; }
+    100% { opacity: 0; }
+  }
+  /* Toast */
+  #toast-container {
+    position: fixed;
+    top: 5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10003;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: center;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 0.8rem 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    letter-spacing: 0.05em;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  /* Decorative */
+  .corner-deco {
+    position: absolute;
+    width: 24px; height: 24px;
+    border: 1px solid var(--primary);
+  }
+  .corner-deco.tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .corner-deco.tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .corner-deco.bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+  .corner-deco.br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  /* Scroll indicator */
+  .scroll-indicator {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    animation: bounce 2s infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(8px); }
+  }
+  .scroll-indicator .arrow {
+    width: 1px; height: 30px;
+    background: linear-gradient(180deg, var(--primary), transparent);
+  }
+  /* Hero number */
+  .hero-number {
+    position: absolute;
+    top: 6rem;
+    right: 2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.8;
+  }
+  .hero-number .big {
+    font-size: 4rem;
+    color: var(--primary);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    opacity: 0.15;
+  }
+  @media (max-width: 768px) { .hero-number { display: none; } }
+</style>
+</head>
+<body>
+
+<!-- Boot Screen -->
+<div id="boot">
+  <div class="boot-content">
+    <div style="color: var(--text-dim); font-size: 0.7rem; letter-spacing: 0.2em; margin-bottom: 1rem;">
+      <span style="color: var(--primary);">●</span> SECURE TERMINAL v3.4.1
+    </div>
+    <pre id="boot-text"></pre>
+    <div id="boot-bar"><div id="boot-progress"></div></div>
+    <div style="margin-top: 1rem; font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between;">
+      <span>AUTHENTICATING...</span>
+      <span id="boot-percent">0%</span>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Cursor -->
+<div class="cursor-dot"></div>
+<div class="cursor-ring"></div>
+
+<!-- Progress Bar -->
+<div id="progress"></div>
+
+<!-- Matrix Background -->
+<canvas id="matrix-bg"></canvas>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Navigation -->
+<nav id="navbar">
+  <div class="nav-content">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span>DARKNET_DETECTIVES</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#home" class="active">[01]_HOME</a></li>
+      <li><a href="#about">[02]_ABOUT</a></li>
+      <li><a href="#crew">[03]_CREW</a></li>
+      <li><a href="#skills">[04]_SKILLS</a></li>
+      <li><a href="#terminal">[05]_TERMINAL</a></li>
+      <li><a href="#contact">[06]_CONTACT</a></li>
+    </ul>
+    <div class="nav-status">
+      <div class="nav-ip">
+        <i class="fas fa-globe"></i> IP: <span id="user-ip">fetching...</span>
+      </div>
+      <span class="status-dot"></span>
+      <span>ONLINE</span>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero Section -->
+<section id="home" class="hero">
+  <div class="grid-bg"></div>
+  
+  <div class="hero-number">
+    <div class="big">03</div>
+    <div>OPERATIVES</div>
+    <div>EST. 2023</div>
+  </div>
+
+  <div class="floating-tag" style="top: 20%; right: 8%; animation-delay: 0s;">
+    <i class="fas fa-shield-halved" style="color: var(--primary);"></i> ENC: AES-256
+  </div>
+  <div class="floating-tag" style="top: 60%; right: 12%; animation-delay: 2s;">
+    <i class="fas fa-network-wired" style="color: var(--tertiary);"></i> NODES: 03
+  </div>
+  <div class="floating-tag" style="top: 35%; left: 5%; animation-delay: 4s;">
+    <i class="fas fa-bug" style="color: var(--secondary);"></i> CVE: 0_FOUND
+  </div>
+
+  <div class="hero-status-bar">
+    <span><i class="fas fa-circle-check"></i> SYSTEM_OPERATIONAL</span>
+    <span><i class="fas fa-lock"></i> SECURE_CHANNEL</span>
+    <span><i class="fas fa-location-dot"></i> LOCATION: ENCRYPTED</span>
+    <span><i class="fas fa-clock"></i> <span id="live-time">00:00:00</span> UTC</span>
+  </div>
+
+  <h1 class="hero-title">
+    <span class="line">DARKNET</span>
+    <span class="line glitch accent" data-text="DETECTIVES">DETECTIVES</span>
+  </h1>
+
+  <p class="hero-subtitle">
+    &gt; A trio of offensive security specialists hunting flags in the shadows of the digital underworld. We dissect binaries, break cryptosystems, and trace the untraceable.
+  </p>
+
+  <div class="hero-typing" id="hero-typing"></div>
+
+  <div class="hero-buttons">
+    <a href="#crew" class="btn">
+      <i class="fas fa-users"></i> ACCESS_CREW
+    </a>
+    <a href="#terminal" class="btn secondary">
+      <i class="fas fa-terminal"></i> OPEN_TERMINAL
+    </a>
+  </div>
+
+  <div class="scroll-indicator">
+    <span>SCROLL</span>
+    <div class="arrow"></div>
+  </div>
+</section>
+
+<!-- About Section -->
+<section id="about">
+  <div class="section-header reveal">
+    <div class="section-title">// 02 — ABOUT THE COLLECTIVE</div>
+    <h2 class="section-heading">We don't play the game.<br><span class="accent">We reverse-engineer it.</span></h2>
+    <p class="section-desc">Darknet Detectives is a three-member CTF collective operating at the intersection of curiosity and chaos. Every challenge is a puzzle waiting to be unpacked — every flag, a story we're destined to tell.</p>
+  </div>
+
+  <div class="about-grid">
+    <div class="about-card reveal">
+      <div class="icon"><i class="fas fa-crosshairs"></i></div>
+      <h3>OFFENSIVE_SECURITY</h3>
+      <p>From initial recon to privilege escalation, we map attack surfaces with surgical precision. Web, network, or host — every vector is fair game.</p>
+    </div>
+    <div class="about-card reveal">
+      <div class="icon"><i class="fas fa-key"></i></div>
+      <h3>CRYPTANALYSIS</h3>
+      <p>RSA, ECC, lattice-based — we break what others consider unbreakable. From classical ciphers to modern schemes, no encryption survives our scrutiny.</p>
+    </div>
+    <div class="about-card reveal">
+      <div class="icon"><i class="fas fa-magnifying-glass-chart"></i></div>
+      <h3>FORENSICS &amp; OSINT</h3>
+      <p>Memory dumps, packet captures, steganographic payloads — we read the digital aftermath like a native language. Every byte tells a story.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Crew Section -->
+<section id="crew">
+  <div class="section-header reveal">
+    <div class="section-title">// 03 — THE DETECTIVES</div>
+    <h2 class="section-heading">Three minds.<br><span class="accent">One objective.</span></h2>
+    <p class="section-desc">Each operative brings a distinct specialty to the table. Together, they form a complete offensive security unit capable of tackling any category a CTF can throw.</p>
+  </div>
+
+  <div class="crew-grid">
+    <!-- Member 1: Leader -->
+    <div class="member-card leader reveal">
+      <div class="member-header">
+        <span class="id">#001 // ROOT</span>
+        <div class="header-right">
+          <span class="status-badge online">ONLINE</span>
+          <span class="leader-badge">LEADER</span>
+        </div>
+      </div>
+      <div class="member-body">
+        <div class="member-avatar">
+          <img src="https://z-cdn-media.chatglm.cn/files/69b5f48a-b4a9-4b5c-9fe1-5f30cd945027.png?auth_key=1885726141-7ffb217202ab48fcaea1f31ce6df3a20-0-95add887287c7ec15118186864b7cfc9" alt="Sunjid Ahmed">
+          <div class="scan"></div>
+        </div>
+        <h3 class="member-name">Sunjid Ahmed</h3>
+        <div class="member-alias">r00td3f3ult</div>
+        <div class="member-role">Founder &amp; Lead Exploitation Engineer</div>
+        <p class="member-bio">Architect of intrusion. Specializes in reverse engineering complex systems and crafting zero-day exploits. Leads the collective with surgical precision and an unhealthy obsession with root access.</p>
+        <div class="member-skills">
+          <span class="skill-tag">PENETRATION_TESTING</span>
+          <span class="skill-tag">REVERSE_ENGINEERING</span>
+          <span class="skill-tag">EXPLOIT_DEV</span>
+          <span class="skill-tag">LINUX_INTERNALS</span>
+          <span class="skill-tag">BINARY_EXPLOITATION</span>
+        </div>
+      </div>
+      <div class="member-footer">
+        <div class="member-links">
+          <a href="https://sunjid.lovable.app/" target="_blank" rel="noopener" title="Portfolio"><i class="fas fa-globe"></i></a>
+          <a href="https://github.com/Sunjid-Ahmed" target="_blank" rel="noopener" title="GitHub"><i class="fab fa-github"></i></a>
+          <a href="https://www.linkedin.com/in/sunjidahmedsiyem/" target="_blank" rel="noopener" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+        </div>
+        <div class="clearance">CLEARANCE: <span class="level">OMEGA</span></div>
+      </div>
+    </div>
+
+    <!-- Member 2 -->
+    <div class="member-card reveal">
+      <div class="member-header">
+        <span class="id">#002 // GHOST</span>
+        <span class="status-badge online">ONLINE</span>
+      </div>
+      <div class="member-body">
+        <div class="member-avatar">
+          <img src="https://z-cdn-media.chatglm.cn/files/73b3c754-8f65-4fc0-bc97-32aa9a8f7eac.png?auth_key=1885726141-eda0dcec623c46c6b0edc0180078aded-0-db51d1e5eb12f12ed40771ff98bf60db" alt="MD Yusuf Miah">
+          <div class="scan"></div>
+        </div>
+        <h3 class="member-name">MD Yusuf Miah</h3>
+        <div class="member-alias">YF_3rr0r</div>
+        <div class="member-role">Web Exploitation Specialist</div>
+        <p class="member-bio">Hunts vulnerabilities in web applications where others see only forms. SQLi, XSS, and SSRF are native dialects. Has a sixth sense for finding injection points in the most unexpected places.</p>
+        <div class="member-skills">
+          <span class="skill-tag">WEB_PENTEST</span>
+          <span class="skill-tag">SQL_INJECTION</span>
+          <span class="skill-tag">XSS</span>
+          <span class="skill-tag">SSRF</span>
+          <span class="skill-tag">API_SECURITY</span>
+        </div>
+      </div>
+      <div class="member-footer">
+        <div class="member-links">
+          <a href="#" title="GitHub"><i class="fab fa-github"></i></a>
+          <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          <a href="#" title="Email"><i class="fas fa-envelope"></i></a>
+        </div>
+        <div class="clearance">CLEARANCE: <span class="level">ALPHA</span></div>
+      </div>
+    </div>
+
+    <!-- Member 3 -->
+    <div class="member-card reveal">
+      <div class="member-header">
+        <span class="id">#003 // CIPHER</span>
+        <span class="status-badge online">ONLINE</span>
+      </div>
+      <div class="member-body">
+        <div class="member-avatar">
+          <img src="https://z-cdn-media.chatglm.cn/files/481d2118-29a1-482b-80b5-2d6ab3036c94.jpg?auth_key=1885726141-abbac780923146dd975ab0418575867f-0-a46806f9f56b17ef53676d49adb4062b" alt="Mirza MD Mahmudunnobi Babu">
+          <div class="scan"></div>
+        </div>
+        <h3 class="member-name">Mirza MD Mahmudunnobi Babu</h3>
+        <div class="member-alias">mirza400</div>
+        <div class="member-role">Forensics &amp; Cryptography Specialist</div>
+        <p class="member-bio">Decodes the undecipherable. From memory dumps to encrypted payloads, every byte tells a story. The team's cryptographic oracle and forensic analyst — when data goes silent, he makes it speak.</p>
+        <div class="member-skills">
+          <span class="skill-tag">DIGITAL_FORENSICS</span>
+          <span class="skill-tag">CRYPTANALYSIS</span>
+          <span class="skill-tag">MEMORY_ANALYSIS</span>
+          <span class="skill-tag">OSINT</span>
+          <span class="skill-tag">STEGANOGRAPHY</span>
+        </div>
+      </div>
+      <div class="member-footer">
+        <div class="member-links">
+          <a href="#" title="GitHub"><i class="fab fa-github"></i></a>
+          <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+          <a href="#" title="Email"><i class="fas fa-envelope"></i></a>
+        </div>
+        <div class="clearance">CLEARANCE: <span class="level">BETA</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Skills Section -->
+<section id="skills">
+  <div class="section-header reveal">
+    <div class="section-title">// 04 — CAPABILITIES MATRIX</div>
+    <h2 class="section-heading">Skill <span class="accent">arsenal.</span></h2>
+    <p class="section-desc">A breakdown of the team's combined expertise across core CTF categories. Numbers don't lie — neither do flags.</p>
+  </div>
+
+  <div class="skills-grid">
+    <div class="skill-list reveal">
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; WEB_EXPLOITATION</span>
+          <span class="skill-percent">95%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="95"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; CRYPTOGRAPHY</span>
+          <span class="skill-percent">92%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="92"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; REVERSE_ENGINEERING</span>
+          <span class="skill-percent">88%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="88"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; DIGITAL_FORENSICS</span>
+          <span class="skill-percent">90%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="90"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; BINARY_EXPLOITATION</span>
+          <span class="skill-percent">82%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="82"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; OSINT</span>
+          <span class="skill-percent">87%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="87"></div></div>
+      </div>
+      <div class="skill-item">
+        <div class="skill-header">
+          <span class="skill-name">&gt; NETWORK_ANALYSIS</span>
+          <span class="skill-percent">85%</span>
+        </div>
+        <div class="skill-bar"><div class="skill-fill" data-level="85"></div></div>
+      </div>
+    </div>
+
+    <div class="radar-container reveal">
+      <div class="radar-title">
+        <span>// THREAT_RADAR.SYS</span>
+        <span class="live"><span class="status-dot"></span>LIVE</span>
+      </div>
+      <svg class="radar-svg" viewBox="0 0 300 300">
+        <defs>
+          <radialGradient id="radarGlow">
+            <stop offset="0%" stop-color="#00ff9d" stop-opacity="0.15"/>
+            <stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="150" cy="150" r="120" fill="url(#radarGlow)"/>
+        <!-- Concentric circles -->
+        <circle cx="150" cy="150" r="120" fill="none" stroke="#1a2028" stroke-width="1"/>
+        <circle cx="150" cy="150" r="90" fill="none" stroke="#1a2028" stroke-width="1"/>
+        <circle cx="150" cy="150" r="60" fill="none" stroke="#1a2028" stroke-width="1"/>
+        <circle cx="150" cy="150" r="30" fill="none" stroke="#1a2028" stroke-width="1"/>
+        <!-- Cross lines -->
+        <line x1="150" y1="30" x2="150" y2="270" stroke="#1a2028" stroke-width="1"/>
+        <line x1="30" y1="150" x2="270" y2="150" stroke="#1a2028" stroke-width="1"/>
+        <line x1="65" y1="65" x2="235" y2="235" stroke="#1a2028" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="235" y1="65" x2="65" y2="235" stroke="#1a2028" stroke-width="1" stroke-dasharray="2,4"/>
+        <!-- Hexagon data shape -->
+        <polygon points="150,40 250,100 250,200 150,260 50,200 50,100" 
+                 fill="rgba(0, 255, 157, 0.1)" 
+                 stroke="#00ff9d" 
+                 stroke-width="1.5"
+                 class="radar-polygon"/>
+        <!-- Data points -->
+        <circle cx="150" cy="40" r="3" fill="#00ff9d"/>
+        <circle cx="250" cy="100" r="3" fill="#00ff9d"/>
+        <circle cx="250" cy="200" r="3" fill="#00ff9d"/>
+        <circle cx="150" cy="260" r="3" fill="#00ff9d"/>
+        <circle cx="50" cy="200" r="3" fill="#00ff9d"/>
+        <circle cx="50" cy="100" r="3" fill="#00ff9d"/>
+        <!-- Center -->
+        <circle cx="150" cy="150" r="4" fill="#ff2e63"/>
+        <circle cx="150" cy="150" r="8" fill="none" stroke="#ff2e63" stroke-width="1" opacity="0.5"/>
+        <!-- Labels -->
+        <text x="150" y="22" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">WEB</text>
+        <text x="265" y="100" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">CRYPTO</text>
+        <text x="265" y="208" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">RE</text>
+        <text x="150" y="285" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">PWN</text>
+        <text x="35" y="208" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">FORENSICS</text>
+        <text x="35" y="100" text-anchor="middle" fill="#6a7a78" font-family="JetBrains Mono" font-size="9">OSINT</text>
+        <!-- Rotating sweep -->
+        <g class="radar-sweep" style="transform-origin: 150px 150px;">
+          <path d="M 150 150 L 150 30 A 120 120 0 0 1 235 235 Z" fill="url(#sweepGrad)"/>
+        </g>
+        <defs>
+          <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00ff9d" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div style="margin-top: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-dim); display: flex; justify-content: space-between;">
+        <span>STATUS: <span style="color: var(--primary);">NOMINAL</span></span>
+        <span>SIGNAL: <span style="color: var(--primary);">STRONG</span></span>
+        <span>THREATS: <span style="color: var(--warning);">0</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Stats Section -->
+<section id="stats" style="padding-top: 4rem;">
+  <div class="section-header reveal">
+    <div class="section-title">// 05 — OPERATIONS LOG</div>
+    <h2 class="section-heading">By the <span class="accent">numbers.</span></h2>
+  </div>
+
+  <div class="stats-grid reveal">
+    <div class="stat-item">
+      <div class="stat-number" data-target="50">0</div>
+      <div class="stat-label">CTFS PARTICIPATED</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" data-target="247">0</div>
+      <div class="stat-label">FLAGS CAPTURED</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" data-target="3">0</div>
+      <div class="stat-label">YEARS ACTIVE</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number" data-target="18">0</div>
+      <div class="stat-label">PODIUM FINISHES</div>
+    </div>
+  </div>
+</section>
+
+<!-- Terminal Section -->
+<section id="terminal">
+  <div class="section-header reveal">
+    <div class="section-title">// 06 — LIVE TERMINAL</div>
+    <h2 class="section-heading">Talk to <span class="accent">the system.</span></h2>
+    <p class="section-desc">A live interactive terminal. Type a command, get a response. Try <code style="color: var(--primary); font-family: 'JetBrains Mono', monospace;">help</code> to see what's available.</p>
+  </div>
+
+  <div class="terminal-container reveal">
+    <div class="terminal-header">
+      <div class="dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <div class="terminal-title">root@darknet-detectives:~#</div>
+      <div class="terminal-info">TTY/01 — SSH</div>
+    </div>
+    <div class="terminal-body" id="terminal-body">
+      <div class="terminal-output primary">┌─────────────────────────────────────────────┐</div>
+      <div class="terminal-output primary">│  DARKNET DETECTIVES — SECURE TERMINAL v3.4  │</div>
+      <div class="terminal-output primary">│  Type 'help' to list available commands.    │</div>
+      <div class="terminal-output primary">└─────────────────────────────────────────────┘</div>
+      <div class="terminal-output dim">Last login: <span id="last-login"></span> from 192.168.1.1</div>
+      <div class="terminal-output dim">&nbsp;</div>
+    </div>
+    <div class="terminal-input-line" style="padding: 0 1.5rem 1rem;">
+      <span class="terminal-prompt">root@darknet:~$</span>
+      <input type="text" class="terminal-input" id="terminal-input" autocomplete="off" spellcheck="false" placeholder="enter command...">
+    </div>
+    <div class="terminal-suggestions">
+      <span data-cmd="help">help</span>
+      <span data-cmd="whoami">whoami</span>
+      <span data-cmd="members">members</span>
+      <span data-cmd="ping">ping</span>
+      <span data-cmd="skills">skills</span>
+      <span data-cmd="stats">stats</span>
+      <span data-cmd="contact">contact</span>
+      <span data-cmd="hack">hack</span>
+      <span data-cmd="matrix">matrix</span>
+      <span data-cmd="clear">clear</span>
+    </div>
+  </div>
+</section>
+
+<!-- Contact Section -->
+<section id="contact">
+  <div class="section-header reveal">
+    <div class="section-title">// 07 — ESTABLISH CONNECTION</div>
+    <h2 class="section-heading">Open a <span class="accent">channel.</span></h2>
+    <p class="section-desc">Want to collaborate, recruit, or challenge us to a CTF? The line is open. All transmissions are encrypted end-to-end.</p>
+  </div>
+
+  <div class="contact-grid">
+    <div class="reveal">
+      <div class="contact-info-card">
+        <div class="contact-icon"><i class="fas fa-envelope"></i></div>
+        <div>
+          <div class="label">EMAIL // PGP</div>
+          <div class="value">cyberdarknetdetectives@gmail.com</div>
+        </div>
+      </div>
+      <div class="contact-info-card">
+        <div class="contact-icon"><i class="fab fa-discord"></i></div>
+        <div>
+          <div class="label">DISCORD</div>
+          <div class="value">darknet_detectives</div>
+        </div>
+      </div>
+      <div class="contact-info-card">
+        <div class="contact-icon"><i class="fab fa-github"></i></div>
+        <div>
+          <div class="label">GITHUB</div>
+          <div class="value">github.com/Sunjid-Ahmed</div>
+        </div>
+      </div>
+      <div class="contact-info-card">
+        <div class="contact-icon"><i class="fas fa-key"></i></div>
+        <div>
+          <div class="label">PGP FINGERPRINT</div>
+          <div class="value" style="font-size: 0.8rem;">4A9B 3F2C 8E1D 7F6A 9C0B<br>2E5D 1F8A 3C4B 7D9E 0F1A</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="contact-form reveal">
+      <div class="corner-deco tl"></div>
+      <div class="corner-deco tr"></div>
+      <div class="corner-deco bl"></div>
+      <div class="corner-deco br"></div>
+      
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--primary); margin-bottom: 1.5rem; letter-spacing: 0.1em;">
+        &gt; TRANSMISSION_PROTOCOL.ACTIVE
+      </div>
+      
+      <form id="contact-form">
+        <div class="form-group">
+          <label class="form-label">// CALLSIGN</label>
+          <input type="text" class="form-input" placeholder="your_handle" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">// RETURN_ADDRESS</label>
+          <input type="email" class="form-input" placeholder="your@channel.io" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">// MESSAGE_PAYLOAD</label>
+          <textarea class="form-textarea" placeholder="encrypt your message here..." required></textarea>
+        </div>
+        <button type="submit" class="btn" style="width: 100%; justify-content: center;">
+          <i class="fas fa-paper-plane"></i> TRANSMIT
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-content">
+    <div class="footer-brand">
+      <div class="logo">
+        <span class="logo-icon">◈</span>
+        <span>DARKNET_DETECTIVES</span>
+      </div>
+      <p>A three-member CTF collective specializing in offensive security, cryptanalysis, and digital forensics. Operating in the shadows since 2023.</p>
+    </div>
+    <div class="footer-col">
+      <h4>// NAVIGATE</h4>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#crew">Crew</a></li>
+        <li><a href="#skills">Skills</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>// PROTOCOLS</h4>
+      <ul>
+        <li><a href="#terminal">Terminal</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="https://sunjid.lovable.app/" target="_blank" rel="noopener">Leader's Portfolio</a></li>
+        <li><a href="https://www.linkedin.com/in/sunjidahmedsiyem/" target="_blank" rel="noopener">Leader's LinkedIn</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2024 DARKNET_DETECTIVES // ALL_OPERATIONS_ETHICAL</div>
+    <div><span class="status-dot"></span> SYSTEM_STATUS: NOMINAL // UPTIME: <span id="uptime">00:00:00</span></div>
+  </div>
+</footer>
+
+<!-- Activity Feed -->
+<div class="activity-feed" id="activity-feed">
+  <div class="activity-header">
+    <span>// LIVE_FEED</span>
+    <span class="close" id="close-feed">[X]</span>
+  </div>
+  <div class="activity-log" id="activity-log">
+    <div><span class="log-time">[00:00:00]</span> <span class="log-msg">System initialized</span></div>
+  </div>
+</div>
+
+<!-- Ping FAB -->
+<button id="ping-squad-btn" class="ping-btn">
+  <i class="fas fa-satellite-dish"></i> PING_SQUAD
+</button>
+
+<script>
+// ============ BOOT SEQUENCE ============
+const bootMessages = [
+  '> initializing secure terminal...',
+  '> establishing encrypted channel...',
+  '> generating AES-256 keys........[OK]',
+  '> bypassing firewall.............[OK]',
+  '> loading crew database..........[OK]',
+  '> verifying operatives...........[OK]',
+  '> 3 members authenticated',
+  '> r00td3f3ult ...... [LEADER]',
+  '> YF_3rr0r ........ [ACTIVE]',
+  '> mirza400 ......... [ACTIVE]',
+  '> access granted.',
+  '> welcome, operator.'
+];
+
+const bootText = document.getElementById('boot-text');
+const bootProgress = document.getElementById('boot-progress');
+const bootPercent = document.getElementById('boot-percent');
+let bootIndex = 0;
+
+function typeBoot() {
+  if (bootIndex < bootMessages.length) {
+    bootText.textContent += bootMessages[bootIndex] + '\n';
+    const progress = ((bootIndex + 1) / bootMessages.length) * 100;
+    bootProgress.style.width = progress + '%';
+    bootPercent.textContent = Math.round(progress) + '%';
+    bootIndex++;
+    setTimeout(typeBoot, 180 + Math.random() * 80);
+  } else {
+    setTimeout(() => {
+      document.getElementById('boot').classList.add('hidden');
+      startHeroTyping();
+    }, 600);
+  }
+}
+setTimeout(typeBoot, 400);
+
+// ============ FETCH IP ADDRESS ============
+fetch('https://api.ipify.org?format=json')
+  .then(response => response.json())
+  .then(data => {
+    const ipEl = document.getElementById('user-ip');
+    if(ipEl) ipEl.textContent = data.ip;
+  })
+  .catch(() => {
+    const ipEl = document.getElementById('user-ip');
+    if(ipEl) ipEl.textContent = 'HIDDEN';
+  });
+
+// ============ CUSTOM CURSOR ============
+const cursorDot = document.querySelector('.cursor-dot');
+const cursorRing = document.querySelector('.cursor-ring');
+let mouseX = 0, mouseY = 0;
+let ringX = 0, ringY = 0;
+
+document.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  cursorDot.style.transform = `translate(${mouseX}px, ${mouseY}px) translate(-50%, -50%)`;
+});
+
+function animateRing() {
+  ringX += (mouseX - ringX) * 0.18;
+  ringY += (mouseY - ringY) * 0.18;
+  cursorRing.style.transform = `translate(${ringX}px, ${ringY}px) translate(-50%, -50%)`;
+  requestAnimationFrame(animateRing);
+}
+animateRing();
+
+document.addEventListener('mousedown', () => cursorRing.classList.add('click'));
+document.addEventListener('mouseup', () => cursorRing.classList.remove('click'));
+
+// Hover effects on interactive elements
+document.querySelectorAll('a, button, input, textarea, .skill-tag, .terminal-suggestions span, .close, .member-card, .about-card').forEach(el => {
+  el.addEventListener('mouseenter', () => cursorRing.classList.add('hover'));
+  el.addEventListener('mouseleave', () => cursorRing.classList.remove('hover'));
+});
+
+// ============ MATRIX RAIN ============
+const matrixCanvas = document.getElementById('matrix-bg');
+const matrixCtx = matrixCanvas.getContext('2d');
+let matrixCols, matrixDrops;
+const matrixChars = '01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ@#$%&*+=<>{}[]';
+
+function resizeMatrix() {
+  matrixCanvas.width = window.innerWidth;
+  matrixCanvas.height = window.innerHeight;
+  matrixCols = Math.floor(matrixCanvas.width / 16);
+  matrixDrops = Array(matrixCols).fill(0).map(() => Math.random() * -100);
+}
+resizeMatrix();
+window.addEventListener('resize', resizeMatrix);
+
+let matrixIntensity = 0.18;
+
+function drawMatrix() {
+  matrixCtx.fillStyle = 'rgba(5, 6, 8, 0.06)';
+  matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+  matrixCtx.font = '14px JetBrains Mono';
+  
+  for (let i = 0; i < matrixDrops.length; i++) {
+    const char = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+    const x = i * 16;
+    const y = matrixDrops[i] * 16;
+    
+    // Brighter head character
+    if (Math.random() > 0.975) {
+      matrixCtx.fillStyle = '#d4f1e0';
+    } else {
+      matrixCtx.fillStyle = '#00ff9d';
+    }
+    matrixCtx.fillText(char, x, y);
+    
+    if (y > matrixCanvas.height && Math.random() > 0.975) {
+      matrixDrops[i] = 0;
+    }
+    matrixDrops[i]++;
+  }
+}
+setInterval(drawMatrix, 50);
+
+// ============ HERO TYPING ============
+const heroMessages = [
+  '> initializing secure connection...',
+  '> bypassing perimeter defenses...',
+  '> access granted. welcome, operator.'
+];
+let heroMsgIndex = 0, heroCharIndex = 0;
+const heroTyping = document.getElementById('hero-typing');
+
+function startHeroTyping() {
+  typeHeroChar();
+}
+
+function typeHeroChar() {
+  if (heroMsgIndex >= heroMessages.length) {
+    setTimeout(() => {
+      heroTyping.textContent = '';
+      heroMsgIndex = 0;
+      typeHeroChar();
+    }, 3000);
+    return;
+  }
+  
+  const msg = heroMessages[heroMsgIndex];
+  if (heroCharIndex < msg.length) {
+    heroTyping.textContent += msg[heroCharIndex];
+    heroCharIndex++;
+    setTimeout(typeHeroChar, 40 + Math.random() * 30);
+  } else {
+    setTimeout(() => {
+      heroTyping.textContent += '  ';
+      heroMsgIndex++;
+      heroCharIndex = 0;
+      typeHeroChar();
+    }, 600);
+  }
+}
+
+// ============ LIVE TIME ============
+function updateTime() {
+  const now = new Date();
+  const time = now.toUTCString().split(' ')[4];
+  document.getElementById('live-time').textContent = time;
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+// Last login
+const lastLoginDate = new Date(Date.now() - Math.random() * 86400000);
+document.getElementById('last-login').textContent = lastLoginDate.toUTCString();
+
+// ============ UPTIME ============
+const startTime = Date.now();
+function updateUptime() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  document.getElementById('uptime').textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateUptime, 1000);
+
+// ============ SCROLL PROGRESS ============
+const progressBar = document.getElementById('progress');
+window.addEventListener('scroll', () => {
+  const scrolled = (window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
+  progressBar.style.width = scrolled + '%';
+});
+
+// ============ NAV SCROLL ============
+let lastScroll = 0;
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  const currentScroll = window.scrollY;
+  if (currentScroll > 100 && currentScroll > lastScroll) {
+    navbar.classList.add('hidden');
+  } else {
+    navbar.classList.remove('hidden');
+  }
+  lastScroll = currentScroll;
+  
+  // Active nav link
+  const sections = document.querySelectorAll('section');
+  let current = '';
+  sections.forEach(section => {
+    const sectionTop = section.offsetTop - 100;
+    if (window.scrollY >= sectionTop) {
+      current = section.getAttribute('id');
+    }
+  });
+  document.querySelectorAll('.nav-links a').forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+});
+
+// ============ REVEAL ANIMATIONS ============
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      
+      // Animate skill bars
+      if (entry.target.classList.contains('skill-list') || entry.target.querySelector('.skill-fill')) {
+        entry.target.querySelectorAll('.skill-fill').forEach(fill => {
+          const level = fill.getAttribute('data-level');
+          fill.style.width = level + '%';
+        });
+      }
+      
+      // Animate stat counters
+      if (entry.target.classList.contains('stats-grid')) {
+        entry.target.querySelectorAll('.stat-number').forEach(stat => {
+          const target = parseInt(stat.getAttribute('data-target'));
+          animateCounter(stat, target);
+        });
+      }
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+// ============ COUNTER ANIMATION ============
+function animateCounter(el, target) {
+  let current = 0;
+  const increment = target / 50;
+  const interval = setInterval(() => {
+    current += increment;
+    if (current >= target) {
+      current = target;
+      clearInterval(interval);
+    }
+    el.textContent = Math.floor(current) + (target >= 50 ? '+' : '');
+  }, 30);
+}
+
+// ============ MEMBER STATUS RANDOMIZER ============
+const statuses = ['online', 'idle', 'offline'];
+function updateMemberStatuses() {
+  document.querySelectorAll('.status-badge').forEach(badge => {
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    badge.className = 'status-badge ' + status;
+    badge.textContent = status.toUpperCase();
+  });
+}
+setInterval(updateMemberStatuses, 10000);
+
+// ============ TOAST NOTIFICATIONS ============
+function showToast(message, type = 'primary') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  document.getElementById('toast-container').appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 100);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 500);
+  }, 3000);
+}
+
+// ============ SQUAD PING FEATURE ============
+function pingSquad() {
+  // Flash screen
+  const flash = document.createElement('div');
+  flash.className = 'ping-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 1000);
+
+  // Toast notifications
+  showToast('SATCOM ACTIVE: Pinging squad...', 'primary');
+  setTimeout(() => showToast('Response from @r00td3f3ult [12ms]', 'primary'), 1000);
+  setTimeout(() => showToast('Response from @YF_3rr0r [45ms]', 'primary'), 2000);
+  setTimeout(() => showToast('Response from @mirza400 [89ms]', 'primary'), 3000);
+}
+
+document.getElementById('ping-squad-btn').addEventListener('click', pingSquad);
+
+// ============ TERMINAL ============
+const terminalBody = document.getElementById('terminal-body');
+const terminalInput = document.getElementById('terminal-input');
+const terminalSuggestions = document.querySelectorAll('.terminal-suggestions span');
+
+const teamData = {
+  members: [
+    { name: 'Sunjid Ahmed', alias: 'r00td3f3ult', role: 'Leader & Exploitation Engineer', clearance: 'OMEGA', links: 'https://sunjid.lovable.app/ | https://github.com/Sunjid-Ahmed | https://www.linkedin.com/in/sunjidahmedsiyem/' },
+    { name: 'MD Yusuf Miah', alias: 'YF_3rr0r', role: 'Web Exploitation Specialist', clearance: 'ALPHA', links: 'N/A' },
+    { name: 'Mirza MD Mahmudunnobi Babu', alias: 'mirza400', role: 'Forensics & Crypto Specialist', clearance: 'BETA', links: 'N/A' }
+  ]
+};
+
+const commands = {
+  help: () => [
+    { text: 'Available commands:', class: 'primary' },
+    { text: '  help        — show this help message', class: '' },
+    { text: '  whoami      — display current user info', class: '' },
+    { text: '  members     — list team members', class: '' },
+    { text: '  ping        — ping squad members', class: '' },
+    { text: '  skills      — show capability matrix', class: '' },
+    { text: '  stats       — display operations log', class: '' },
+    { text: '  contact     — show contact channels', class: '' },
+    { text: '  hack        — [REDACTED]', class: 'dim' },
+    { text: '  matrix      — enter the matrix', class: 'dim' },
+    { text: '  ls          — list directory contents', class: '' },
+    { text: '  cat <file>  — read file contents', class: '' },
+    { text: '  sudo        — try it.', class: 'dim' },
+    { text: '  clear       — clear terminal', class: '' }
+  ],
+  whoami: () => [
+    { text: 'user: anonymous_operator', class: '' },
+    { text: 'uid: 0 (root)', class: 'primary' },
+    { text: 'groups: darknet, detectives, ctf', class: '' },
+    { text: 'access_level: GUEST', class: 'warning' },
+    { text: 'auth_method: RSA-4096', class: 'dim' }
+  ],
+  members: () => {
+    const out = [{ text: '┌─ CREW_MANIFEST ─────────────────────────┐', class: 'primary' }];
+    teamData.members.forEach((m, i) => {
+      out.push({ text: `│ [${String(i+1).padStart(2,'0')}] ${m.alias.padEnd(14)} │ ${m.role}`, class: '' });
+      out.push({ text: `│     ↳ ${m.name}`, class: 'dim' });
+      out.push({ text: `│     ↳ clearance: ${m.clearance}`, class: 'warning' });
+    });
+    out.push({ text: '└─────────────────────────────────────────┘', class: 'primary' });
+    return out;
+  },
+  ping: () => {
+    pingSquad();
+    setTimeout(() => addOutput([{ text: '64 bytes from r00td3f3ult: icmp_seq=1 ttl=64 time=12.4 ms', class: 'primary' }]), 1000);
+    setTimeout(() => addOutput([{ text: '64 bytes from YF_3rr0r: icmp_seq=1 ttl=64 time=45.1 ms', class: 'primary' }]), 2000);
+    setTimeout(() => addOutput([{ text: '64 bytes from mirza400: icmp_seq=1 ttl=64 time=89.7 ms', class: 'primary' }]), 3000);
+    setTimeout(() => addOutput([{ text: '--- squad ping statistics ---', class: 'dim' }, { text: '3 packets transmitted, 3 received, 0% packet loss', class: 'warning' }]), 3500);
+    return [
+      { text: '> Pinging darknet_detectives on subnet 192.168.1.0/24...', class: 'primary' }
+    ];
+  },
+  skills: () => [
+    { text: '> CAPABILITY MATRIX:', class: 'primary' },
+    { text: '  [██████████] WEB_EXPLOITATION    95%', class: '' },
+    { text: '  [█████████ ] CRYPTOGRAPHY        92%', class: '' },
+    { text: '  [████████  ] DIGITAL_FORENSICS   90%', class: '' },
+    { text: '  [████████  ] OSINT               87%', class: '' },
+    { text: '  [████████  ] REVERSE_ENGINEERING 88%', class: '' },
+    { text: '  [███████   ] NETWORK_ANALYSIS    85%', class: '' },
+    { text: '  [███████   ] BINARY_EXPLOITATION 82%', class: '' }
+  ],
+  stats: () => [
+    { text: '> OPERATIONS_LOG:', class: 'primary' },
+    { text: '  CTFs participated:  50+', class: '' },
+    { text: '  Flags captured:      247', class: '' },
+    { text: '  Years active:        3', class: '' },
+    { text: '  Podium finishes:     18', class: '' },
+    { text: '  Vulnerabilities reported: 34', class: 'warning' }
+  ],
+  contact: () => [
+    { text: '> CONTACT_CHANNELS:', class: 'primary' },
+    { text: '  email:    cyberdarknetdetectives@gmail.com', class: '' },
+    { text: '  discord:  darknet_detectives', class: '' },
+    { text: '  github:   github.com/Sunjid-Ahmed', class: '' },
+    { text: '  linkedin: linkedin.com/in/sunjidahmedsiyem', class: '' },
+    { text: '  pgp:      4A9B 3F2C 8E1D 7F6A 9C0B 2E5D 1F8A 3C4B', class: 'dim' }
+  ],
+  ls: () => [
+    { text: 'about.md  crew.dat  skills.bin  contact.pgp  manifesto.txt  flag.txt', class: 'primary' }
+  ],
+  hack: () => {
+    const out = [
+      { text: '> INITIALIZING INTRUSION SEQUENCE...', class: 'warning' },
+      { text: '> scanning target...', class: '' },
+      { text: '> [####............] 23%', class: 'dim' }
+    ];
+    setTimeout(() => addOutput([{ text: '> [#########.......] 56%', class: 'dim' }]), 800);
+    setTimeout(() => addOutput([{ text: '> [##############..] 87%', class: 'dim' }]), 1600);
+    setTimeout(() => addOutput([
+      { text: '> [################] 100%', class: 'primary' },
+      { text: '> just kidding. we hack ethically. ;)', class: 'secondary' },
+      { text: '> but feel free to challenge us in a CTF.', class: '' }
+    ]), 2400);
+    return out;
+  },
+  matrix: () => {
+    matrixIntensity = 0.5;
+    matrixCanvas.style.opacity = matrixIntensity;
+    setTimeout(() => {
+      matrixCanvas.style.opacity = 0.18;
+    }, 5000);
+    return [
+      { text: '> wake up, operator...', class: 'primary' },
+      { text: '> the matrix has you.', class: 'primary' },
+      { text: '> follow the white rabbit. 🐇', class: 'secondary' }
+    ];
+  },
+  sudo: () => [
+    { text: 'user is not in the sudoers file. This incident will be reported.', class: 'secondary' },
+    { text: '> nice try though. 👀', class: 'dim' }
+  ],
+  exit: () => [
+    { text: '> there is no escape.', class: 'secondary' }
+  ]
+};
+
+// Easter egg files
+const files = {
+  'flag.txt': 'FLAG{w3lcome_t0_darknet_detectives_you_found_the_hidden_flag}',
+  'about.md': '# Darknet Detectives\nA CTF collective of three operatives.\nFounded 2023.',
+  'manifesto.txt': 'We believe curiosity is the highest form of intelligence.\nEvery system is a puzzle. Every puzzle has a solution.\nEvery solution teaches us something new.\n\n— Darknet Detectives'
+};
+
+function addOutput(lines) {
+  lines.forEach(line => {
+    const div = document.createElement('div');
+    div.className = 'terminal-output ' + (line.class || '');
+    div.textContent = line.text;
+    terminalBody.appendChild(div);
+  });
+  terminalBody.scrollTop = terminalBody.scrollHeight;
+}
+
+function processCommand(cmd) {
+  const trimmed = cmd.trim().toLowerCase();
+  
+  // Echo the command
+  const echoDiv = document.createElement('div');
+  echoDiv.className = 'terminal-output';
+  echoDiv.innerHTML = `<span style="color: var(--secondary);">root@darknet:~$</span> <span style="color: var(--primary);">${cmd}</span>`;
+  terminalBody.appendChild(echoDiv);
+  
+  if (trimmed === 'clear') {
+    terminalBody.innerHTML = '';
+    return;
+  }
+  
+  if (trimmed.startsWith('cat ')) {
+    const filename = trimmed.substring(4).trim();
+    if (files[filename]) {
+      addOutput([
+        { text: '─'.repeat(45), class: 'dim' },
+        { text: files[filename], class: 'primary' },
+        { text: '─'.repeat(45), class: 'dim' }
+      ]);
+    } else {
+      addOutput([{ text: `cat: ${filename}: No such file or directory`, class: 'secondary' }]);
+    }
+    return;
+  }
+  
+  if (commands[trimmed]) {
+    const result = commands[trimmed]();
+    if (result) addOutput(result);
+  } else if (trimmed === '') {
+    return;
+  } else {
+    addOutput([
+      { text: `command not found: ${trimmed}`, class: 'secondary' },
+      { text: `type 'help' for available commands`, class: 'dim' }
+    ]);
+  }
+}
+
+terminalInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const cmd = terminalInput.value;
+    processCommand(cmd);
+    terminalInput.value = '';
+  }
+});
+
+// Suggestion clicks
+terminalSuggestions.forEach(span => {
+  span.addEventListener('click', () => {
+    const cmd = span.getAttribute('data-cmd');
+    terminalInput.value = cmd;
+    terminalInput.focus();
+    processCommand(cmd);
+    terminalInput.value = '';
+  });
+});
+
+// Focus terminal on click
+document.querySelector('.terminal-container').addEventListener('click', () => {
+  terminalInput.focus();
+});
+
+// ============ CONTACT FORM ============
+document.getElementById('contact-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENCRYPTING...';
+  setTimeout(() => {
+    btn.innerHTML = '<i class="fas fa-check"></i> TRANSMITTED';
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      e.target.reset();
+    }, 2000);
+  }, 1500);
+});
+
+// ============ ACTIVITY FEED ============
+const activityLog = document.getElementById('activity-log');
+const activities = [
+  'flag captured: web_chall_03',
+  'new exploit discovered',
+  'cipher cracked: RSA-2048',
+  'forensic image acquired',
+  'packet captured: 192.168.1.1',
+  'privilege escalated',
+  'shell obtained: root@target',
+  'memory dump analyzed',
+  'steganography decoded',
+  'SQL injection confirmed',
+  'XSS payload delivered',
+  'reverse shell established'
+];
+
+function addActivity() {
+  const time = new Date().toUTCString().split(' ')[4];
+  const msg = activities[Math.floor(Math.random() * activities.length)];
+  const div = document.createElement('div');
+  div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-msg">${msg}</span>`;
+  activityLog.insertBefore(div, activityLog.firstChild);
+  while (activityLog.children.length > 4) {
+    activityLog.removeChild(activityLog.lastChild);
+  }
+}
+setInterval(addActivity, 4000);
+
+document.getElementById('close-feed').addEventListener('click', () => {
+  document.getElementById('activity-feed').classList.add('hidden');
+});
+
+// ============ RADAR SWEEP ============
+const radarSweep = document.querySelector('.radar-sweep');
+if (radarSweep) {
+  let sweepAngle = 0;
+  function rotateSweep() {
+    sweepAngle = (sweepAngle + 1) % 360;
+    radarSweep.style.transform = `rotate(${sweepAngle}deg)`;
+    requestAnimationFrame(rotateSweep);
+  }
+  rotateSweep();
+}
+
+// ============ KEYBOARD EASTER EGG ============
+let konamiCode = [];
+const konami = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+document.addEventListener('keydown', (e) => {
+  konamiCode.push(e.key);
+  if (konamiCode.length > konami.length) konamiCode.shift();
+  if (konamiCode.join('') === konami.join('')) {
+    addOutput([
+      { text: '┌────────────────────────────────────────┐', class: 'primary' },
+      { text: '│  KONAMI CODE ACTIVATED                 │', class: 'primary' },
+      { text: '│  You have unlocked GOD MODE.           │', class: 'warning' },
+      { text: '│  Just kidding. But respect for trying. │', class: '' },
+      { text: '└────────────────────────────────────────┘', class: 'primary' }
+    ]);
+    document.getElementById('terminal').scrollIntoView({ behavior: 'smooth' });
+    konamiCode = [];
+  }
+});
+
+console.log('%c⚠ DARKNET DETECTIVES ⚠', 'color: #00ff9d; font-size: 24px; font-weight: bold;');
+console.log('%cLooking for the flag? Try: cat flag.txt in the terminal.', 'color: #00d4ff; font-size: 14px;');
+</script>
+</body>
+</html>
